@@ -12,6 +12,10 @@ Original file is located at
 #installation:
 #!pip install googledrivedownloader
 
+from google.colab import drive 
+drive.mount('/mntDrive') 
+! ls "/mntDrive/My Drive"
+
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -22,8 +26,6 @@ import math
 from time import time
 
 from sklearn.utils import shuffle
-# from sklearn.preprocessing import PolynomialFeatures # unused here
-# from sklearn.decomposition import TruncatedSVD # unused here
 
 import xgboost
 
@@ -177,7 +179,7 @@ X, y = data.loc[:,x_cols].values, data.loc[:,'target'].values
 clf = xgboost.XGBRegressor(verbosity=0)
 
 # use a full grid over 4 parameters
-param_grid = {'max_depth': [3, 5, 10], 'min_child_weight': [1, 3, 6], 'alpha':[0,0.005,0.01], 'lambda':[0,0.005,0.01]}
+param_grid = {'max_depth': [3, 5, 10], 'min_child_weight': [1, 3, 6], 'alpha':[0.25,0.5,0.75], 'lambda':[0.25,0.5,0.75]}
 
 # run grid search
 grid_search = GridSearchCV(clf, param_grid=param_grid, cv=5, scoring="r2" ,iid=False)
@@ -193,8 +195,8 @@ res_grid['experiment_name']='grid search'
 # specify parameters and distributions
 param_dist = {"max_depth": sp_randint(3, 10),
               "min_child_weight": sp_randint(1, 10),
-              "alpha": uniform(loc=0, scale=0.1),
-              "lambda": uniform(loc=0, scale=0.1)}
+              "alpha": uniform(loc=0, scale=1),
+              "lambda": uniform(loc=0, scale=1)}
 
 
 # run randomized search
@@ -222,6 +224,20 @@ print("GridSearchCV took %.2f seconds for %d candidate parameter settings."
 default=pd.DataFrame(default.cv_results_)
 default['experiment_name']='default params'
 
+# get some data
+x_cols = data.columns.to_list()
+x_cols.remove('target')
+X, y = data.loc[:,x_cols].values, data.loc[:,'target'].values
+
+# build a classifier
+clf = xgboost.XGBRegressor(verbosity=0)
+"""
+clf_tmp=clf
+dict_p={"max_depth": 4,
+              "min_child_weight": 2}
+clf_tmp.set_params(**dict_p)
+"""
+
 # random groups test
 #first group:
 param_dist = {"max_depth": sp_randint(3, 10),
@@ -236,14 +252,15 @@ random_search.fit(X, y)
 print("RandomizedSearchCV for first group took %.2f seconds for %d candidates"
       " parameter settings." % ((time() - start), n_iter_search))
 
+
 res_rand_1=pd.DataFrame(random_search.cv_results_)
 res_rand_1['experiment_name']='random search for 1 group'        
 
-
+clf.set_params(**random_search.best_params_)
 #second group:
-param_dist = {"alpha": uniform(loc=0, scale=0.1),
-              "gamma":uniform(loc=0, scale=0.5),
-              "lambda": uniform(loc=0, scale=0.1)}
+param_dist = {"alpha": uniform(loc=0, scale=1),
+              "gamma":uniform(loc=0, scale=1),
+              "lambda": uniform(loc=0, scale=1)}
 
 random_search = RandomizedSearchCV(clf, param_distributions=param_dist,
                                    n_iter=n_iter_search, cv=5, scoring="r2", iid=False)
@@ -256,7 +273,7 @@ print("RandomizedSearchCV for second group took %.2f seconds for %d candidates"
 res_rand_2=pd.DataFrame(random_search.cv_results_)
 res_rand_2['experiment_name']='random search for 2 group' 
 
-
+clf.set_params(**random_search.best_params_)
 #third group:
 param_dist = {"subsample":uniform(loc=0.5, scale=0.4),
               "colsample_bytree":uniform(loc=0.5, scale=0.4)}
@@ -276,13 +293,9 @@ res= pd.concat([res_grid, res_rand, res_rand_1,res_rand_2,res_rand_3,default])
 
 res[:2]
 
-res.to_csv("res.csv",index=False)
+res.to_csv("res_new.csv",index=False)
 
-from google.colab import drive 
-drive.mount('/mntDrive') 
-! ls "/mntDrive/My Drive"
+cp res_new.csv "/mntDrive/My Drive/data/xgboost_perfomance_for_groups.csv"
 
-cp res.csv "/mntDrive/My Drive/data/xgboost_perfomance.csv"
-
-"""# Plotting"""
+res.shape
 
