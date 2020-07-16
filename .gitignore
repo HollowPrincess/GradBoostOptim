@@ -7,8 +7,8 @@ __pycache__/
 .idea*
 *.iml
 *checkpoint*
-SparkProjects/SparkBayes/project
-SparkProjects/SparkBayes/target
-SparkProjects/SparkBayes/src/main/resources
+SparkBayes/project
+SparkBayes/target
+SparkBayes/src/main/resources
 *.swp
 

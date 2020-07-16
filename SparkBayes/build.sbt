@@ -1,4 +1,4 @@
-name := "sparkbayes"
+name := "sparkprojects"
 version := "1.0"
 scalaVersion := "2.11.12"
 libraryDependencies ++= Seq(
@@ -6,7 +6,9 @@ libraryDependencies ++= Seq(
   "org.apache.spark" % "spark-sql_2.11" % "2.4.0",
   "org.apache.spark" % "spark-streaming_2.11" % "2.4.0",
   "org.apache.spark" % "spark-mllib_2.11" % "2.4.0",
-  "org.jmockit" % "jmockit" % "1.34" % "test"
+  "org.jmockit" % "jmockit" % "1.34" % "test",
+  "ml.dmlc" % "xgboost4j-spark" % "0.81",
+  "ml.dmlc" % "xgboost4j" % "0.81"
 )
-libraryDependencies += "ml.dmlc" % "xgboost4j-spark" % "0.81"
-libraryDependencies += "ml.dmlc" % "xgboost4j" % "0.81"
+
+libraryDependencies +=   "ru.odnoklassniki" %% "pravda-ml" %   "0.6.1" withSources()
