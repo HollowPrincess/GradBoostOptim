@@ -3,12 +3,12 @@ __pycache__/
 *$py.class
 
 ## For Spark
-
 .idea*
 *.iml
 *checkpoint*
 SparkBayes/project
 SparkBayes/target
 SparkBayes/src/main/resources
+SparkBayes/data/*
 *.swp
 

@@ -1,8 +1,9 @@
 package sample
+import ml.dmlc.xgboost4j.scala.spark.XGBoostRegressionModel
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.types.{BooleanType, DataType, DoubleType, IntegerType}
-import org.apache.spark.ml.odkl.{AutoAssembler, Evaluator, RegressionEvaluator, Scaler, UnwrappedStage, XGBoostRegressor}
+import org.apache.spark.ml.odkl._
 import org.apache.spark.ml.odkl.hyperopt._
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.odkl.Evaluator.TrainTestEvaluator
@@ -26,7 +27,7 @@ object BayesOpt {
     val spark = org.apache.spark.sql.SparkSession.builder
       .master("local")
       .appName("SparkBayes")
-      .getOrCreate;
+      .getOrCreate()
 
     val startTime = System.nanoTime
     var df = spark.read.format("csv")
@@ -50,23 +51,23 @@ object BayesOpt {
     preparedDF = castAllTypedColumnsTo(preparedDF, colsToDouble, DoubleType)
     //preparedDF.printSchema()
 
-    val Array(trainingData, testData) = preparedDF.randomSplit(Array(0.7, 0.3))
-
     val featuresArray = colsNames.filter(! _.contains("label"))
     val features_assembler = new VectorAssembler()
       .setInputCols(featuresArray)
       .setOutputCol("features")
     preparedDF = features_assembler.transform(preparedDF)
-    //preparedDF.select("features", "label").show(true)
+    preparedDF = preparedDF.select("features", "label")
 
     // TODO: check default values of hyperparameters
     // XGBoost from pravda-ml:
     val model = new XGBoostRegressor()
-      //.setFeatureCol("features")
+      .setFeatureCol("features")
+      .setNumEarlyStoppingRounds(2)
 
     val evaluator = Evaluator.crossValidate(
       model,
       new TrainTestEvaluator(new RegressionEvaluator()),
+      //new RegressionEvaluator(),
       numThreads = 5,
       numFolds = 5
     )
@@ -78,13 +79,13 @@ object BayesOpt {
         ParamDomainPair(model.lambda, new DoubleRangeDomain(0.1,1.0))
       )
       .setNumThreads(10)
-      .setMaxIter(3)
-      //.setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'auc' AND isTest")
-
-
+      .setMaxIter(2)
+      //.setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'rmse' AND isTest")
+    println("optimizer works")
+    preparedDF.show(5,true)
     val res = optimizer.fit(preparedDF)
-
-    println(res)
+    println("optimizer fitted")
+    println(res.getEvalMetric)
 
 
 
