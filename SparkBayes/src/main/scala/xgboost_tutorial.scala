@@ -7,7 +7,7 @@ import ml.dmlc.xgboost4j.scala.spark.XGBoostClassifier
 
 // Tutorial from https://xgboost.readthedocs.io/en/latest/jvm/xgboost4j_spark_tutorial.html
 
-object LogisticTry {
+object xgboost_tutorial {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder().master("local").getOrCreate()
 

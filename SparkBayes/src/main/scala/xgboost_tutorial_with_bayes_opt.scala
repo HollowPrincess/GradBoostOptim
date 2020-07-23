@@ -1,58 +1,85 @@
+import org.apache.spark.ml.Pipeline
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.{DoubleType, StringType, StructField, StructType}
-import org.apache.spark.ml.feature.StringIndexer
-import org.apache.spark.ml.feature.VectorAssembler
-import ml.dmlc.xgboost4j.scala.spark.XGBoostClassifier
+import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
+import org.apache.spark.ml.odkl.{Evaluator, RegressionEvaluator, XGBoostRegressor}
+import org.apache.spark.ml.odkl.Evaluator.TrainTestEvaluator
+import org.apache.spark.ml.odkl.hyperopt._
 
-// Tutorial from https://xgboost.readthedocs.io/en/latest/jvm/xgboost4j_spark_tutorial.html
-
-object LogisticTry {
+object xgboost_tutorial_with_bayes_opt {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder().master("local").getOrCreate()
 
-    // Read Dataset with Spark’s Built-In Reader
+    // Изначально я была не уверена в исходном коде программы,
+    // поэтому решила начать с простого и делала классификацию ирисов,
+    // дополнив байесовской оптимизацией.
+    // Все было ок для логистической регрессии по двум классам ирисов.
+    // Логистическая регрессия была взята на основании примера из презентации.
+    // Я оставила этот датасет только для того,
+    // чтобы проверить работоспособность программы для градиентного бустинга
+    // Следующий блок  - предобработка данных:
     val schema = new StructType(Array(
       StructField("sepal length", DoubleType, true),
       StructField("sepal width", DoubleType, true),
       StructField("petal length", DoubleType, true),
       StructField("petal width", DoubleType, true),
       StructField("class", StringType, true)))
-    val rawInput = spark.read.schema(schema).csv("data/iris.data")
-    //rawInput.show(5)
+    var rawInput = spark.read.schema(schema).csv("data/iris.data")
 
-    // Transform Raw Iris Dataset
-    // Этот блок кодирует классы как double числа
     val stringIndexer = new StringIndexer().
       setInputCol("class").
-      setOutputCol("classIndex").
+      setOutputCol("label").
       fit(rawInput)
-    val labelTransformed = stringIndexer.transform(rawInput).drop("class")
-    //labelTransformed.show(5)
 
-    // Здесь все фичи преобразуются в вектора знаков
     val vectorAssembler = new VectorAssembler().
       setInputCols(Array("sepal length", "sepal width", "petal length", "petal width")).
       setOutputCol("features")
-    val xgbInput = vectorAssembler.transform(labelTransformed).select("features", "classIndex")
-    //xgbInput.show(5)
 
-    // Dealing with missing values
+    var pipeline = new Pipeline().setStages(
+      Array(
+        stringIndexer,
+        vectorAssembler
+      )
+    )
+    val xgbInput = pipeline.fit(rawInput).transform(rawInput).select("features", "label")
     val Array(trainset, testset) = xgbInput.randomSplit(Array[Double](0.7, 0.3), 18)
+    //Конец обработки данных
 
-    val xgbParam = Map("eta" -> 0.1f,
-      "missing" -> -999,
-      "objective" -> "multi:softprob",
-      "num_class" -> 3,
-      "num_round" -> 10,
-      "num_workers" -> 1)
-    val xgbClassifier = new XGBoostClassifier(xgbParam).
-      setFeaturesCol("features").
-      setLabelCol("classIndex")
+    // Регрессия:
+    val model = new XGBoostRegressor()
+      .setFeatureCol("features")
+      .setNumRounds(3)
+      .setNumWorkers(1)
 
-    // Training
-    xgbClassifier.setMaxDepth(2)
-    val xgbClassificationModel = xgbClassifier.fit(trainset)
-    val results = xgbClassificationModel.transform(testset)
+    /*
+    // Вопрос:
+    // почему Evaluator.crossValidate распознает XGBoostRegressor как SummarizableEstimator
+    // а следующую модель нет?
+    val model = new LinearRegression()
+      .setFeaturesCol("features")
+      .setLabelCol("label")
+     */
+
+    val evaluator = Evaluator.crossValidate(
+      model,
+      new TrainTestEvaluator(new RegressionEvaluator()),
+      numThreads = 5,
+      numFolds = 5
+    )
+
+    val estimator = new StochasticHyperopt(evaluator)
+      .setSearchMode(BayesianParamOptimizer.GAUSSIAN_PROCESS)
+      .setParamDomains(
+        ParamDomainPair(model.maxDepth, new IntRangeDomain(1,10)),
+        ParamDomainPair(model.lambda, new DoubleRangeDomain(0.1,1.0))
+      )
+      .setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'r2' AND isTest")
+      .setNumThreads(15)
+      .setMaxIter(3)
+      .setNanReplacement(-999)
+
+    val result = estimator.fit(trainset)
+    println(estimator.extractConfig(result))
   }
 
 }
