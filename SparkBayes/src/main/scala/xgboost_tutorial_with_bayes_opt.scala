@@ -4,6 +4,7 @@ import org.apache.spark.sql.types.{DoubleType, StringType, StructField, StructTy
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 import org.apache.spark.ml.odkl.{Evaluator, RegressionEvaluator, XGBoostRegressor}
 import org.apache.spark.ml.odkl.Evaluator.TrainTestEvaluator
+import org.apache.spark.ml.odkl.ModelWithSummary.Block
 import org.apache.spark.ml.odkl.hyperopt._
 
 object xgboost_tutorial_with_bayes_opt {
@@ -75,11 +76,26 @@ object xgboost_tutorial_with_bayes_opt {
       )
       .setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'r2' AND isTest")
       .setNumThreads(15)
-      .setMaxIter(3)
+      .setMaxIter(10)
       .setNanReplacement(-999)
 
     val result = estimator.fit(trainset)
-    println(estimator.extractConfig(result))
+    println(result.summary)
+    val row = result.summary.blocks.keys
+    println("tables names:")
+    row.foreach(println)
+
+    println("configs")
+    val configs = result.summary(Block("configurations"))
+    configs.show(5, true)
+
+    /*
+    println("metrics") // значения разных метрик по фолдам
+    val metrics = result.summary(Block("metrics"))
+    metrics.show()
+    */
+
+
   }
 
 }
