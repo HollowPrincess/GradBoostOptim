@@ -25,7 +25,7 @@ object xgboost_tutorial_with_bayes_opt {
       StructField("petal length", DoubleType, true),
       StructField("petal width", DoubleType, true),
       StructField("class", StringType, true)))
-    var rawInput = spark.read.schema(schema).csv("data/iris.data")
+    val rawInput = spark.read.schema(schema).csv("data/iris.data")
 
     val stringIndexer = new StringIndexer().
       setInputCol("class").
@@ -36,21 +36,21 @@ object xgboost_tutorial_with_bayes_opt {
       setInputCols(Array("sepal length", "sepal width", "petal length", "petal width")).
       setOutputCol("features")
 
-    var pipeline = new Pipeline().setStages(
+    val pipeline = new Pipeline().setStages(
       Array(
         stringIndexer,
         vectorAssembler
       )
     )
     val xgbInput = pipeline.fit(rawInput).transform(rawInput).select("features", "label")
-    val Array(trainset, testset) = xgbInput.randomSplit(Array[Double](0.7, 0.3), 18)
+    val Array(trainset, _) = xgbInput.randomSplit(Array[Double](0.7, 0.3), 18)
     //Конец обработки данных
 
     // Регрессия:
     val model = new XGBoostRegressor()
       .setFeatureCol("features")
-      .setNumRounds(3)
-      .setNumWorkers(1)
+      //.setNumRounds(3)
+      //.setNumWorkers(1)
 
     /*
     // Вопрос:
@@ -64,18 +64,18 @@ object xgboost_tutorial_with_bayes_opt {
     val evaluator = Evaluator.crossValidate(
       model,
       new TrainTestEvaluator(new RegressionEvaluator()),
-      numThreads = 5,
+      //numThreads = 5,
       numFolds = 5
     )
 
     val estimator = new StochasticHyperopt(evaluator)
       .setSearchMode(BayesianParamOptimizer.GAUSSIAN_PROCESS)
       .setParamDomains(
-        ParamDomainPair(model.maxDepth, new IntRangeDomain(1,10)),
-        ParamDomainPair(model.lambda, new DoubleRangeDomain(0.1,1.0))
+        ParamDomainPair(model.maxDepth, IntRangeDomain(1,10)),
+        ParamDomainPair(model.lambda, DoubleRangeDomain(0.1,1.0))
       )
       .setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'r2' AND isTest")
-      .setNumThreads(15)
+      //.setNumThreads(15)
       .setMaxIter(10)
       .setNanReplacement(-999)
 
