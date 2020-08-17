@@ -76,24 +76,33 @@ object xgboost_tutorial_with_bayes_opt {
       )
       .setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'r2' AND isTest")
       //.setNumThreads(15)
-      .setMaxIter(10)
+      .setMaxIter(4)
       .setNanReplacement(-999)
 
-    val result = estimator.fit(trainset)
-    println(result.summary)
-    val row = result.summary.blocks.keys
-    println("tables names:")
-    row.foreach(println)
-
-    println("configs")
-    val configs = result.summary(Block("configurations"))
-    configs.show(5, true)
+    val opt_result = estimator.fit(trainset)
+    println(opt_result.extractParamMap())
+    println(opt_result.toString())
 
     /*
-    println("metrics") // значения разных метрик по фолдам
-    val metrics = result.summary(Block("metrics"))
-    metrics.show()
+    val row = opt_result.summary.blocks.keys
+    println("tables names:")
+    row.foreach(println)
     */
+
+    println("configs")
+    val configs = opt_result.summary(Block("configurations"))
+    configs.show(5, true)
+    /*configs.write.format("csv")
+      .option("header", "true")
+      .save("data/output/BO_configs_1.csv")*/
+
+
+    println("metrics") // значения разных метрик по фолдам
+    val metrics = opt_result.summary(Block("metrics"))
+    metrics.show(5, true)
+    /*metrics.write.format("csv")
+      .option("header", "true")
+      .save("data/output/BO_metrics_1.csv")*/
 
 
   }
