@@ -1,0 +1,2 @@
+mean_fit_time,std_fit_time,mean_score_time,std_score_time,param_max_depth,params,split0_test_score,split1_test_score,split2_test_score,mean_test_score,std_test_score,rank_test_score,experiment_name
+6.881849924723308,0.12241101749578064,0.045626163482666016,0.0006524131177439006,3,{'max_depth': 3},0.8955883513534844,0.8880909162654881,0.8910812943962115,0.8915868540050614,0.0030816203652466873,1,default params
