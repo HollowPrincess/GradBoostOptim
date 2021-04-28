@@ -4,7 +4,7 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.types.{BooleanType, DoubleType, IntegerType}
 import org.apache.spark.ml.odkl._
-import org.apache.spark.ml.odkl.hyperopt._
+import org.apache.spark.ml.odkl.hyperopt.{GroupedSearch, _}
 import org.apache.spark.ml.odkl.Evaluator.TrainTestEvaluator
 import org.apache.spark.ml.odkl.ModelWithSummary.Block
 import org.apache.spark.SparkContext
@@ -13,51 +13,35 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.ml.param.ParamMap
 import java.io._
 
+import org.apache.hadoop.io.MD5Hash
+import org.apache.spark.annotation.Since
+import org.apache.spark.ml.odkl._
+import org.apache.spark.ml.param._
+import org.apache.spark.ml.util.Identifiable
+import org.apache.spark.repro.ReproContext
+import org.apache.spark.sql._
 
-import sample.BayesOpt.castAllTypedColumnsTo
+import org.apache.spark.ml.odkl._
+import org.apache.spark.ml.param._
 
-object GroupedRandomSearch {
 
-  def main(args: Array[String]): Unit = {
-    val conf = new SparkConf().
-      setMaster("local").
-      setAppName("LearnScalaSpark")
-    val sc = new SparkContext(conf)
-    sc.setLogLevel("ERROR")
+class GroupedSearchXGBoost [ModelIn <: ModelWithSummary[ModelIn]]{
+  var groupIterNums: Array[Int] = Array(1, 1, 1)
+  def setGroupIterNums(values: Array[Int]): Unit = {
+    groupIterNums = values
+  }
 
-    val spark = SparkSession.builder
-      .master("local")
-      .appName("SparkBayes")
-      .getOrCreate()
 
-    // Data preparation
-    var df = spark.read.format("csv")
-      .option("header", "true")
-      .load("../data/input/prepared_facebook_data.csv")
+  var searchModes = Array(BayesianParamOptimizer.RANDOM, BayesianParamOptimizer.RANDOM, BayesianParamOptimizer.RANDOM)
+//  def setSearchModes(values: Array[String]): Unit = {
+//    searchModes = values
+//  }
 
-    // get features vector:
-    // convert columns for suitable datatype:
-    df = df.withColumnRenamed("target","label")
-    val colsNames = df.columns
-    val colsToInt = colsNames.filter(_.contains("comments_")) ++ Array("page_talking_about", "base_time", "share_num")
-    val colsToBool = colsNames.filter(_.contains("h_local_"))
-    var colsToDouble = colsNames
-    colsToDouble = List(colsToDouble, colsToBool).reduce((a, b) => a diff b)
-    colsToDouble = List(colsToDouble, colsToInt).reduce((a, b) => a diff b)
 
-    var preparedDF = castAllTypedColumnsTo(df, colsToInt, IntegerType)
-    preparedDF = castAllTypedColumnsTo(preparedDF, colsToBool, BooleanType)
-    preparedDF = castAllTypedColumnsTo(preparedDF, colsToDouble, DoubleType)
-
-    val featuresArray = colsNames.filter(! _.contains("label"))
-    val features_assembler = new VectorAssembler()
-      .setInputCols(featuresArray)
-      .setOutputCol("features")
-    preparedDF = features_assembler.transform(preparedDF)
-    preparedDF = preparedDF.select("features", "label")
+  def runOptimization()(preparedDF: DataFrame): Unit = {
 
     // Hyperparameters optimization
-    val model = new XGBoostRegressor()
+    var model = new XGBoostRegressor()
       .setFeatureCol("features")
       .setEta(0.1)
       .setMaxDepth(3)
@@ -72,52 +56,55 @@ object GroupedRandomSearch {
     )
 
     val optimizer_first_group = new StochasticHyperopt(evaluator)
-      .setSearchMode(BayesianParamOptimizer.RANDOM)
+      .setSearchMode(searchModes(0))
       .setParamDomains(
         ParamDomainPair(model.maxDepth, IntRangeDomain(1, 20)),
         ParamDomainPair(model.minChildWeight, DoubleRangeDomain(1.0, 20.0))
       )
       .setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'r2' AND isTest")
       .setNumThreads(1)
-      .setMaxIter(2)//728
+      .setMaxIter(groupIterNums(0))//728
       .setNanReplacement(-999)
       .setEpsilonGreedy(0.1)
       .setParamNames(
         model.maxDepth -> "maxDepth",
         model.minChildWeight -> "minChildWeight"
       )
+      .setMaxNoImproveIters(10)
 
     val optimizer_second_group = new StochasticHyperopt(evaluator)
-      .setSearchMode(BayesianParamOptimizer.RANDOM)
+      .setSearchMode(searchModes(1))
       .setParamDomains(
         ParamDomainPair(model.alpha, DoubleRangeDomain(0.0, 1.0)),
         ParamDomainPair(model.lambda, DoubleRangeDomain(0.0, 1.0))
       )
       .setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'r2' AND isTest")
       .setNumThreads(1)
-      .setMaxIter(2)//728
+      .setMaxIter(groupIterNums(1))//728
       .setNanReplacement(-999)
       .setEpsilonGreedy(0.1)
       .setParamNames(
         model.alpha -> "alpha",
         model.lambda -> "lambda"
       )
+      .setMaxNoImproveIters(10)
 
     val optimizer_third_group = new StochasticHyperopt(evaluator)
-      .setSearchMode(BayesianParamOptimizer.RANDOM)
+      .setSearchMode(searchModes(2))
       .setParamDomains(
         ParamDomainPair(model.subsample, DoubleRangeDomain(0.5, 0.9)),
         ParamDomainPair(model.colsampleBytree, DoubleRangeDomain(0.5, 0.9))
       )
       .setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'r2' AND isTest")
       .setNumThreads(1)
-      .setMaxIter(2)//728
+      .setMaxIter(groupIterNums(2))//728
       .setNanReplacement(-999)
       .setEpsilonGreedy(0.1)
       .setParamNames(
         model.subsample -> "subsample",
         model.colsampleBytree -> "colsampleBytree"
       )
+      .setMaxNoImproveIters(10)
 
     val estimator = new GroupedSearch(Seq(
       "firstGroup" -> optimizer_first_group,
@@ -132,30 +119,25 @@ object GroupedRandomSearch {
     println("configs")
     val configs = opt_result.summary(Block("configurations"))
     configs.show(9, true)
-    configs.write.format("csv")
-      .option("header", "true")
-      .save("data/output/GRS_configs_1.csv")
 
 
-    println("metrics") // значения разных метрик по фолдам
-    val metrics = opt_result.summary(Block("metrics"))
-    metrics.show(9, true)
-    metrics.write.format("csv")
-      .option("header", "true")
-      .save("data/output/GRS_metrics_1.csv")
 
-    println("Total time: " + duration.toString())
+//    configs.write.format("csv")
+//      .option("header", "true")
+//      .save("data/output/GRS_configs_1.csv")
 
-//    println(optimizer_first_group.extractConfig(opt_result).toString())
-//    println(optimizer_second_group.extractConfig(opt_result).toString())
-//    println(optimizer_third_group.extractConfig(opt_result).toString())
 
-    val file = new File("data/output/GRS_info_1.csv")
-    val bw = new BufferedWriter(new FileWriter(file))
-    bw.write("Total time: " + duration.toString() + "\n") // + estimator.extractConfig(opt_result).toString())
-    bw.close()
+//    println("metrics") // значения разных метрик по фолдам
+//    val metrics = opt_result.summary(Block("metrics"))
+//    metrics.show(9, true)
+//    metrics.write.format("csv")
+//      .option("header", "true")
+//      .save("data/output/GRS_metrics_1.csv")
+//
+//    println("Total time: " + duration.toString())
+//    val file = new File("data/output/GRS_info_1.csv")
+//    val bw = new BufferedWriter(new FileWriter(file))
+//    bw.write("Total time: " + duration.toString() + "\n") // + estimator.extractConfig(opt_result).toString())
+//    bw.close()
   }
-
-
 }
-
