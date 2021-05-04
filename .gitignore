@@ -12,5 +12,6 @@ SparkBayes/.idea/*
 SparkBayes/project/target/*
 SparkBayes/project/project
 SparkBayes/target/*
+SparkBayes/data/*
 *.zplnb
 

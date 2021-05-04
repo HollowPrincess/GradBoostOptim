@@ -80,7 +80,7 @@ object BayesOpt {
       model,
       new TrainTestEvaluator(new RegressionEvaluator()),
       //numThreads = 5,
-      numFolds = 5
+      numFolds = 3
     )
 
 
@@ -95,16 +95,16 @@ object BayesOpt {
     val estimator = new StochasticHyperopt(evaluator)
       .setSearchMode(BayesianParamOptimizer.GAUSSIAN_PROCESS)
       .setParamDomains(
-        ParamDomainPair(model.maxDepth, IntRangeDomain(1,10)),
-        ParamDomainPair(model.minChildWeight, DoubleRangeDomain(1.0,10.0)),
-        ParamDomainPair(model.alpha, DoubleRangeDomain(0.0,1.0)),
-        ParamDomainPair(model.lambda, DoubleRangeDomain(0.0,1.0)),
-        ParamDomainPair(model.subsample, DoubleRangeDomain(0.5,0.9)),
-        ParamDomainPair(model.colsampleBytree, DoubleRangeDomain(0.5,0.9))
+        ParamDomainPair(model.maxDepth, IntRangeDomain(1, 20)),
+        ParamDomainPair(model.minChildWeight, DoubleRangeDomain(1.0, 20.0)),
+        ParamDomainPair(model.alpha, DoubleRangeDomain(0.0, 1.0)),
+        ParamDomainPair(model.lambda, DoubleRangeDomain(0.0, 1.0)),
+        ParamDomainPair(model.subsample, DoubleRangeDomain(0.5, 0.9)),
+        ParamDomainPair(model.colsampleBytree, DoubleRangeDomain(0.5, 0.9))
       )
       .setMetricsExpression("SELECT AVG(value) FROM __THIS__ WHERE metric = 'r2' AND isTest")
       //.setNumThreads(15)
-      .setMaxIter(728)//728
+      .setMaxIter(2)//728
       .setNanReplacement(-999)
       .setEpsilonGreedy(0.1)
 
@@ -112,8 +112,8 @@ object BayesOpt {
     val opt_result = estimator.fit(preparedDF)
     val duration = (System.nanoTime - startTime) / 1e9d
 
-    println(opt_result.extractParamMap())
-    println(opt_result.toString())
+    // println(opt_result.extractParamMap())
+    //println(opt_result.toString())
 
     println("configs")
     val configs = opt_result.summary(Block("configurations"))
@@ -130,11 +130,11 @@ object BayesOpt {
       .option("header", "true")
       .save("data/output/BO_metrics_1.csv")
 
-    println("Totaltime: "+duration.toString())
+    println("Total time: " + duration.toString())
     println(estimator.extractConfig(opt_result).toString())
     val file = new File("data/output/BO_info_1.csv")
     val bw = new BufferedWriter(new FileWriter(file))
-    bw.write("Totaltime: "+duration.toString()+"\n"+estimator.extractConfig(opt_result).toString())
+    bw.write("Total time: " + duration.toString() + "\n" + estimator.extractConfig(opt_result).toString())
     bw.close()
   }
 }

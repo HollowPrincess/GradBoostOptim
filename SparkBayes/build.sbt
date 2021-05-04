@@ -1,4 +1,4 @@
-name := "sparkprojects"
+name := "SparkBayes"
 version := "1.0"
 scalaVersion := "2.11.12"
 libraryDependencies ++= Seq(
@@ -11,4 +11,4 @@ libraryDependencies ++= Seq(
   "ml.dmlc" % "xgboost4j" % "0.90"
 )
 
-libraryDependencies +=   "ru.odnoklassniki" %% "pravda-ml" %   "0.6.1" withSources()
+libraryDependencies +=   "ru.odnoklassniki" %% "pravda-ml" % "0.6.1" withSources()
